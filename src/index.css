@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  background: #000000;
+  overscroll-behavior-y: none;
+}
+
+body {
+  @apply font-sans text-ink-primary antialiased;
+  font-feature-settings: 'ss01' 1, 'ss02' 1;
+}
+
+#root {
+  min-height: 100dvh;
+  background: #000000;
+}
+
+/* Hide scrollbars on horizontal rows while keeping them scrollable */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Skeleton shimmer */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.045) 25%,
+    rgba(255, 255, 255, 0.09) 37%,
+    rgba(255, 255, 255, 0.045) 63%
+  );
+  background-size: 800px 100%;
+  @apply animate-shimmer;
+}
+
+/* Glass surface */
+.glass {
+  background: rgba(255, 255, 255, 0.045);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-strong {
+  background: rgba(18, 18, 20, 0.72);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+/* Accent gradient text */
+.text-gradient-accent {
+  background: linear-gradient(120deg, #ff8fc2 0%, #ff3e8a 45%, #c81e5c 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Focus ring, accessible + on-brand */
+.focus-ring {
+  @apply outline-none;
+}
+.focus-ring:focus-visible {
+  box-shadow: 0 0 0 2px #000000, 0 0 0 4px #ff3e8a;
+}
+
+/* Safe areas for iOS notch / home indicator */
+.pt-safe {
+  padding-top: max(env(safe-area-inset-top), 0px);
+}
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom), 0px);
+}
+
+::selection {
+  background: rgba(255, 62, 138, 0.35);
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

@@ -24,9 +24,11 @@ export function toSourceVideo(video: YouTubeVideo): SourceVideo {
 export const youtubeSource: VideoSource = {
   id: YOUTUBE_SOURCE_ID,
   label: 'YouTube',
-  isAvailable: () => Boolean(import.meta.env.VITE_YOUTUBE_API_KEY),
-  // searchYouTube has no abort support, so the signal is intentionally unused.
-  search: async (query) => (await searchYouTube(query)).map(toSourceVideo),
+  // Always listed: a missing API key is reported by searchYouTube() with a
+  // descriptive error, exactly as before, instead of silently hiding the tab.
+  isAvailable: () => true,
+  search: async (query, signal) =>
+    (await searchYouTube(query, signal)).map(toSourceVideo),
   getPlayback: async (video) => ({
     kind: 'embed',
     url: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(video.id)}?autoplay=1&playsinline=1&rel=0`,

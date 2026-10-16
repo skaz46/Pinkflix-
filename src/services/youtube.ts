@@ -34,6 +34,7 @@ const API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY
 
 export async function searchYouTube(
   query: string,
+  signal?: AbortSignal,
 ): Promise<YouTubeVideo[]> {
   if (!API_KEY) {
     throw new Error(
@@ -53,6 +54,7 @@ export async function searchYouTube(
 
   const response = await fetch(
     `https://www.googleapis.com/youtube/v3/search?${params.toString()}`,
+    { signal },
   )
 
   const data = (await response.json()) as YouTubeSearchResponse

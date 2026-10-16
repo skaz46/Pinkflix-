@@ -16,6 +16,7 @@ vi.mock('../services/youtube', () => ({
 }))
 
 const { youtubeSource, toSourceVideo } = await import('./youtube')
+const { searchYouTube } = await import('../services/youtube')
 
 function fake(id: string, available: boolean): VideoSource {
   return {
@@ -48,6 +49,16 @@ describe('youtube source wrapper', () => {
       thumbnail: undefined,
       webUrl: 'https://www.youtube.com/watch?v=abc%20123',
     })
+  })
+
+  it('stays available so a missing API key still surfaces its descriptive error', () => {
+    expect(youtubeSource.isAvailable()).toBe(true)
+  })
+
+  it('passes the abort signal through to the search service', async () => {
+    const controller = new AbortController()
+    await youtubeSource.search('anything', controller.signal)
+    expect(searchYouTube).toHaveBeenCalledWith('anything', controller.signal)
   })
 
   it('returns the same nocookie embed URL the existing overlay uses', async () => {

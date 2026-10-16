@@ -1,100 +1,310 @@
-import { useEffect, useMemo, useState } from 'react'
-import { SlidersHorizontal, SearchX } from 'lucide-react'
+
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { LoaderCircle, SearchX, SlidersHorizontal } from 'lucide-react'
 import { PageTransition } from '../components/layout/PageTransition'
 import { SearchBar } from '../components/search/SearchBar'
 import { SortMenu } from '../components/search/SortMenu'
 import { FilterDrawer } from '../components/search/FilterDrawer'
 import { VideoCard } from '../components/video/VideoCard'
+import { YouTubeVideoCard } from '../components/video/YouTubeVideoCard'
+import { YouTubePlayerOverlay } from '../components/video/YouTubePlayerOverlay'
 import { GridSkeleton } from '../components/video/VideoCardSkeleton'
 import { EmptyState } from '../components/common/EmptyState'
 import { catalog } from '../data/catalog'
 import { useCatalogQuery } from '../hooks/useCatalogQuery'
 import { defaultFilters, countActiveFilters } from '../utils/catalogQuery'
+import { searchYouTube } from '../services/youtube'
+import type { YouTubeVideo } from '../services/youtube'
 import type { FilterState, SortOption, Tag } from '../types'
 
-const availableTags = Array.from(new Set(catalog.flatMap((c) => c.tags))).sort() as Tag[]
+const availableTags = Array.from(
+  new Set(catalog.flatMap((c) => c.tags)),
+).sort() as Tag[]
+
+type SearchMode = 'youtube' | 'catalog'
 
 export function Search() {
   const [query, setQuery] = useState('')
+  const [mode, setMode] = useState<SearchMode>('youtube')
   const [sort, setSort] = useState<SortOption>('relevance')
   const [filters, setFilters] = useState<FilterState>(defaultFilters)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
 
+  const [youtubeResults, setYoutubeResults] = useState<YouTubeVideo[]>([])
+  const [youtubeLoading, setYoutubeLoading] = useState(false)
+  const [youtubeError, setYoutubeError] = useState('')
+  const [selectedVideo, setSelectedVideo] = useState<YouTubeVideo | null>(null)
+
   useEffect(() => {
-    const t = setTimeout(() => setInitialLoading(false), 420)
-    return () => clearTimeout(t)
+    const timer = setTimeout(() => setInitialLoading(false), 420)
+    return () => clearTimeout(timer)
   }, [])
 
-  const { results } = useCatalogQuery({ items: catalog, query, filters, sort })
-  const activeFilterCount = useMemo(() => countActiveFilters(filters), [filters])
+  useEffect(() => {
+    if (mode !== 'youtube') {
+      setYoutubeLoading(false)
+      return
+    }
+
+    const searchTerm = query.trim()
+
+    if (!searchTerm) {
+      setYoutubeResults([])
+      setYoutubeError('')
+      setYoutubeLoading(false)
+      return
+    }
+
+    let cancelled = false
+
+    const timer = setTimeout(async () => {
+      setYoutubeLoading(true)
+      setYoutubeError('')
+
+      try {
+        const videos = await searchYouTube(searchTerm)
+
+        if (!cancelled) {
+          setYoutubeResults(videos)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setYoutubeResults([])
+          setYoutubeError(
+            error instanceof Error
+              ? error.message
+              : 'Something went wrong while searching YouTube.',
+          )
+        }
+      } finally {
+        if (!cancelled) {
+          setYoutubeLoading(false)
+        }
+      }
+    }, 400)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [query, mode])
+
+  const { results } = useCatalogQuery({
+    items: catalog,
+    query,
+    filters,
+    sort,
+  })
+
+  const activeFilterCount = useMemo(
+    () => countActiveFilters(filters),
+    [filters],
+  )
+
+  const closePlayer = useCallback(() => {
+    setSelectedVideo(null)
+  }, [])
+
+  function switchMode(nextMode: SearchMode) {
+    setMode(nextMode)
+    setYoutubeError('')
+    setDrawerOpen(false)
+  }
 
   return (
     <PageTransition>
       <div className="px-4 sm:px-6 pt-4 pb-6">
         <div className="flex items-center gap-2.5 mb-4">
-          <div className="flex-1">
-            <SearchBar value={query} onChange={setQuery} />
+          <div className="flex-1 min-w-0">
+            <SearchBar
+              value={query}
+              onChange={setQuery}
+              placeholder={
+                mode === 'youtube'
+                  ? 'Search YouTube videos…'
+                  : 'Search titles, tags, studios…'
+              }
+            />
           </div>
+
+          {mode === 'catalog' && (
+            <button
+              onClick={() => setDrawerOpen(true)}
+              aria-label="Filters"
+              className="focus-ring relative w-[46px] h-[46px] rounded-2xl glass flex items-center justify-center shrink-0"
+            >
+              <SlidersHorizontal size={18} className="text-ink-primary" />
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-[18px] h-[18px] rounded-full bg-accent-500 text-white text-[10px] font-bold flex items-center justify-center">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+          )}
+        </div>
+
+        <div className="flex gap-2 mb-5">
           <button
-            onClick={() => setDrawerOpen(true)}
-            aria-label="Filters"
-            className="focus-ring relative w-[46px] h-[46px] rounded-2xl glass flex items-center justify-center shrink-0"
+            onClick={() => switchMode('youtube')}
+            className={`focus-ring rounded-full px-4 py-2 text-[12.5px] font-semibold transition-colors ${
+              mode === 'youtube'
+                ? 'bg-accent-500 text-white'
+                : 'bg-white/6 text-ink-secondary hover:bg-white/10'
+            }`}
           >
-            <SlidersHorizontal size={18} className="text-ink-primary" />
-            {activeFilterCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-[18px] h-[18px] min-w-[18px] px-1 rounded-full bg-accent-500 text-white text-[10px] font-bold flex items-center justify-center">
-                {activeFilterCount}
-              </span>
-            )}
+            YouTube
+          </button>
+
+          <button
+            onClick={() => switchMode('catalog')}
+            className={`focus-ring rounded-full px-4 py-2 text-[12.5px] font-semibold transition-colors ${
+              mode === 'catalog'
+                ? 'bg-accent-500 text-white'
+                : 'bg-white/6 text-ink-secondary hover:bg-white/10'
+            }`}
+          >
+            My PinkFlix
           </button>
         </div>
 
-        <div className="mb-5">
-          <SortMenu value={sort} onChange={setSort} />
-        </div>
-
-        {initialLoading ? (
-          <GridSkeleton count={10} />
-        ) : results.length === 0 ? (
-          <EmptyState
-            icon={<SearchX size={24} />}
-            title="No matches found"
-            description="Try a different search term, or reset your filters to see more titles."
-            action={
-              <button
-                onClick={() => {
-                  setQuery('')
-                  setFilters(defaultFilters)
-                }}
-                className="focus-ring rounded-full bg-accent-500 hover:bg-accent-600 text-white text-[13.5px] font-semibold px-4 py-2 transition-colors"
-              >
-                Clear search &amp; filters
-              </button>
-            }
-          />
+        {mode === 'youtube' ? (
+          <section>
+            {!query.trim() ? (
+              <div className="py-14 text-center">
+                <div className="mx-auto mb-4 w-14 h-14 rounded-2xl glass flex items-center justify-center">
+                  <SearchX size={24} className="text-accent-400" />
+                </div>
+                <h2 className="text-base font-semibold text-ink-primary">
+                  What do you want to watch?
+                </h2>
+                <p className="mt-2 text-sm text-ink-tertiary">
+                  Search YouTube and play videos right here in PinkFlix.
+                </p>
+              </div>
+            ) : youtubeLoading ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <LoaderCircle
+                  size={28}
+                  className="animate-spin text-accent-400"
+                />
+                <p className="text-sm text-ink-tertiary">
+                  Searching YouTube…
+                </p>
+              </div>
+            ) : youtubeError ? (
+              <div className="py-10 text-center">
+                <SearchX
+                  size={28}
+                  className="mx-auto mb-3 text-accent-400"
+                />
+                <h2 className="font-semibold text-ink-primary">
+                  YouTube search failed
+                </h2>
+                <p className="mt-2 text-sm text-ink-tertiary break-words">
+                  {youtubeError}
+                </p>
+                <button
+                  onClick={() => setQuery((value) => `${value} `)}
+                  className="mt-4 rounded-full bg-accent-500 px-4 py-2 text-sm font-semibold text-white"
+                >
+                  Try again
+                </button>
+              </div>
+            ) : youtubeResults.length === 0 ? (
+              <EmptyState
+                icon={<SearchX size={24} />}
+                title="No videos found"
+                description="Try a different search term."
+                action={
+                  <button
+                    onClick={() => setQuery('')}
+                    className="focus-ring rounded-full bg-accent-500 text-white text-[13.5px] font-semibold px-4 py-2"
+                  >
+                    Clear search
+                  </button>
+                }
+              />
+            ) : (
+              <>
+                <p className="text-[12.5px] text-ink-tertiary mb-3">
+                  {youtubeResults.length} YouTube results
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-3 gap-y-6">
+                  {youtubeResults.map((video) => (
+                    <YouTubeVideoCard
+                      key={video.id}
+                      video={video}
+                      onPlay={setSelectedVideo}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+          </section>
         ) : (
-          <>
-            <p className="text-[12.5px] text-ink-tertiary mb-3">
-              {results.length} {results.length === 1 ? 'title' : 'titles'}
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-3 gap-y-6">
-              {results.map((item, i) => (
-                <VideoCard key={item.id} item={item} index={i} />
-              ))}
+          <section>
+            <div className="mb-5">
+              <SortMenu value={sort} onChange={setSort} />
             </div>
-          </>
+
+            {initialLoading ? (
+              <GridSkeleton count={10} />
+            ) : results.length === 0 ? (
+              <EmptyState
+                icon={<SearchX size={24} />}
+                title="No matches found"
+                description="Try a different search term, or reset your filters to see more titles."
+                action={
+                  <button
+                    onClick={() => {
+                      setQuery('')
+                      setFilters(defaultFilters)
+                    }}
+                    className="focus-ring rounded-full bg-accent-500 hover:bg-accent-600 text-white text-[13.5px] font-semibold px-4 py-2 transition-colors"
+                  >
+                    Clear search &amp; filters
+                  </button>
+                }
+              />
+            ) : (
+              <>
+                <p className="text-[12.5px] text-ink-tertiary mb-3">
+                  {results.length}{' '}
+                  {results.length === 1 ? 'title' : 'titles'}
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-3 gap-y-6">
+                  {results.map((item, index) => (
+                    <VideoCard
+                      key={item.id}
+                      item={item}
+                      index={index}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+          </section>
         )}
       </div>
 
-      <FilterDrawer
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        filters={filters}
-        onChange={setFilters}
-        availableTags={availableTags}
-        resultCount={results.length}
-      />
+      {mode === 'catalog' && (
+        <FilterDrawer
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          filters={filters}
+          onChange={setFilters}
+          availableTags={availableTags}
+          resultCount={results.length}
+        />
+      )}
+
+      {selectedVideo && (
+        <YouTubePlayerOverlay
+          video={selectedVideo}
+          onClose={closePlayer}
+        />
+      )}
     </PageTransition>
   )
 }

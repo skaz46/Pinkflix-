@@ -35,5 +35,7 @@ export interface VideoSource {
   /** True when the source is configured and enabled. Must not touch the network. */
   isAvailable: () => boolean
   search: (query: string, signal?: AbortSignal) => Promise<SourceVideo[]>
+  /** Optional: lists videos when the search box is empty (catalogue-style sources). */
+  browse?: (signal?: AbortSignal) => Promise<SourceVideo[]>
   getPlayback: (video: SourceVideo) => Promise<Playback>
 }

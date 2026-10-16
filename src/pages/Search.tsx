@@ -131,7 +131,7 @@ export function Search() {
 
         {activeSource ? (
           <section>
-            {!query.trim() ? (
+            {!query.trim() && !activeSource.browse ? (
               <div className="py-14 text-center">
                 <div className="mx-auto mb-4 w-14 h-14 rounded-2xl glass flex items-center justify-center">
                   <SearchX size={24} className="text-accent-400" />

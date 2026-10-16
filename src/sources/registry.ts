@@ -1,5 +1,6 @@
 import type { VideoSource } from './types'
 import { youtubeSource } from './youtube'
+import { pornhubSource } from './pornhub/source'
 
 export function createRegistry(all: VideoSource[]) {
   return {
@@ -12,4 +13,4 @@ export function createRegistry(all: VideoSource[]) {
 }
 
 // Future sources are added to this list; they stay hidden until isAvailable() is true.
-export const sourceRegistry = createRegistry([youtubeSource])
+export const sourceRegistry = createRegistry([youtubeSource, pornhubSource])

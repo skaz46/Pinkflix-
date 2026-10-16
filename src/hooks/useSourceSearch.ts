@@ -10,11 +10,24 @@ interface SearchState {
   error: string
 }
 
+/**
+ * Decides what to run for the current input, or null when there is nothing to do.
+ * Typed text always searches; an empty box browses only for sources that support it.
+ */
+export function pickSearchRunner(
+  source: VideoSource,
+  term: string,
+): ((signal: AbortSignal) => Promise<SourceVideo[]>) | null {
+  if (term) return (signal) => source.search(term, signal)
+  const browse = source.browse
+  return browse ? (signal) => browse(signal) : null
+}
+
 const IDLE = { results: [] as SourceVideo[], loading: false, error: '' }
 
 /**
  * Debounced search against one video source.
- * - An empty query clears results.
+ * - An empty query clears results, unless the source offers browse() (catalogues).
  * - A changed query/source aborts the in-flight request and ignores its result.
  * - With no source (e.g. the local catalogue tab) the last state is kept untouched.
  */
@@ -28,8 +41,9 @@ export function useSourceSearch(
     if (!source) return
 
     const term = query.trim()
+    const run = pickSearchRunner(source, term)
 
-    if (!term) {
+    if (!run) {
       setState(null)
       return
     }
@@ -45,7 +59,7 @@ export function useSourceSearch(
       }))
 
       try {
-        const results = await source.search(term, controller.signal)
+        const results = await run(controller.signal)
 
         if (!controller.signal.aborted) {
           setState({ sourceId: source.id, results, loading: false, error: '' })
@@ -63,7 +77,7 @@ export function useSourceSearch(
           })
         }
       }
-    }, DEBOUNCE_MS)
+    }, term ? DEBOUNCE_MS : 0)
 
     return () => {
       controller.abort()

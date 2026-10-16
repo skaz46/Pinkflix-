@@ -6,89 +6,48 @@ import { SearchBar } from '../components/search/SearchBar'
 import { SortMenu } from '../components/search/SortMenu'
 import { FilterDrawer } from '../components/search/FilterDrawer'
 import { VideoCard } from '../components/video/VideoCard'
-import { YouTubeVideoCard } from '../components/video/YouTubeVideoCard'
-import { YouTubePlayerOverlay } from '../components/video/YouTubePlayerOverlay'
+import { SourceVideoCard } from '../components/video/SourceVideoCard'
+import { SourcePlayerOverlay } from '../components/video/SourcePlayerOverlay'
 import { GridSkeleton } from '../components/video/VideoCardSkeleton'
 import { EmptyState } from '../components/common/EmptyState'
 import { catalog } from '../data/catalog'
 import { useCatalogQuery } from '../hooks/useCatalogQuery'
 import { defaultFilters, countActiveFilters } from '../utils/catalogQuery'
-import { searchYouTube } from '../services/youtube'
-import type { YouTubeVideo } from '../services/youtube'
+import { useSourceSearch } from '../hooks/useSourceSearch'
+import { sourceRegistry } from '../sources/registry'
+import type { SourceVideo } from '../sources/types'
 import type { FilterState, SortOption, Tag } from '../types'
 
 const availableTags = Array.from(
   new Set(catalog.flatMap((c) => c.tags)),
 ).sort() as Tag[]
 
-type SearchMode = 'youtube' | 'catalog'
+// Search mode is a video source id (from the registry) or the local catalogue.
+const CATALOG_MODE = 'catalog'
 
 export function Search() {
   const [query, setQuery] = useState('')
-  const [mode, setMode] = useState<SearchMode>('youtube')
+  const sources = sourceRegistry.available()
+  const [mode, setMode] = useState<string>(
+    () => sources[0]?.id ?? CATALOG_MODE,
+  )
+  const activeSource = sources.find((source) => source.id === mode)
   const [sort, setSort] = useState<SortOption>('relevance')
   const [filters, setFilters] = useState<FilterState>(defaultFilters)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
 
-  const [youtubeResults, setYoutubeResults] = useState<YouTubeVideo[]>([])
-  const [youtubeLoading, setYoutubeLoading] = useState(false)
-  const [youtubeError, setYoutubeError] = useState('')
-  const [selectedVideo, setSelectedVideo] = useState<YouTubeVideo | null>(null)
+  const [selectedVideo, setSelectedVideo] = useState<SourceVideo | null>(null)
+  const {
+    results: sourceResults,
+    loading: sourceLoading,
+    error: sourceError,
+  } = useSourceSearch(activeSource, query)
 
   useEffect(() => {
     const timer = setTimeout(() => setInitialLoading(false), 420)
     return () => clearTimeout(timer)
   }, [])
-
-  useEffect(() => {
-    if (mode !== 'youtube') {
-      setYoutubeLoading(false)
-      return
-    }
-
-    const searchTerm = query.trim()
-
-    if (!searchTerm) {
-      setYoutubeResults([])
-      setYoutubeError('')
-      setYoutubeLoading(false)
-      return
-    }
-
-    let cancelled = false
-
-    const timer = setTimeout(async () => {
-      setYoutubeLoading(true)
-      setYoutubeError('')
-
-      try {
-        const videos = await searchYouTube(searchTerm)
-
-        if (!cancelled) {
-          setYoutubeResults(videos)
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setYoutubeResults([])
-          setYoutubeError(
-            error instanceof Error
-              ? error.message
-              : 'Something went wrong while searching YouTube.',
-          )
-        }
-      } finally {
-        if (!cancelled) {
-          setYoutubeLoading(false)
-        }
-      }
-    }, 400)
-
-    return () => {
-      cancelled = true
-      clearTimeout(timer)
-    }
-  }, [query, mode])
 
   const { results } = useCatalogQuery({
     items: catalog,
@@ -106,9 +65,8 @@ export function Search() {
     setSelectedVideo(null)
   }, [])
 
-  function switchMode(nextMode: SearchMode) {
+  function switchMode(nextMode: string) {
     setMode(nextMode)
-    setYoutubeError('')
     setDrawerOpen(false)
   }
 
@@ -121,14 +79,14 @@ export function Search() {
               value={query}
               onChange={setQuery}
               placeholder={
-                mode === 'youtube'
-                  ? 'Search YouTube videos…'
+                activeSource
+                  ? `Search ${activeSource.label} videos…`
                   : 'Search titles, tags, studios…'
               }
             />
           </div>
 
-          {mode === 'catalog' && (
+          {!activeSource && (
             <button
               onClick={() => setDrawerOpen(true)}
               aria-label="Filters"
@@ -145,21 +103,24 @@ export function Search() {
         </div>
 
         <div className="flex gap-2 mb-5">
-          <button
-            onClick={() => switchMode('youtube')}
-            className={`focus-ring rounded-full px-4 py-2 text-[12.5px] font-semibold transition-colors ${
-              mode === 'youtube'
-                ? 'bg-accent-500 text-white'
-                : 'bg-white/6 text-ink-secondary hover:bg-white/10'
-            }`}
-          >
-            YouTube
-          </button>
+          {sources.map((source) => (
+            <button
+              key={source.id}
+              onClick={() => switchMode(source.id)}
+              className={`focus-ring rounded-full px-4 py-2 text-[12.5px] font-semibold transition-colors ${
+                activeSource?.id === source.id
+                  ? 'bg-accent-500 text-white'
+                  : 'bg-white/6 text-ink-secondary hover:bg-white/10'
+              }`}
+            >
+              {source.label}
+            </button>
+          ))}
 
           <button
-            onClick={() => switchMode('catalog')}
+            onClick={() => switchMode(CATALOG_MODE)}
             className={`focus-ring rounded-full px-4 py-2 text-[12.5px] font-semibold transition-colors ${
-              mode === 'catalog'
+              !activeSource
                 ? 'bg-accent-500 text-white'
                 : 'bg-white/6 text-ink-secondary hover:bg-white/10'
             }`}
@@ -168,9 +129,9 @@ export function Search() {
           </button>
         </div>
 
-        {mode === 'youtube' ? (
+        {activeSource ? (
           <section>
-            {!query.trim() ? (
+            {!query.trim() && !activeSource.browse ? (
               <div className="py-14 text-center">
                 <div className="mx-auto mb-4 w-14 h-14 rounded-2xl glass flex items-center justify-center">
                   <SearchX size={24} className="text-accent-400" />
@@ -179,30 +140,30 @@ export function Search() {
                   What do you want to watch?
                 </h2>
                 <p className="mt-2 text-sm text-ink-tertiary">
-                  Search YouTube and play videos right here in PinkFlix.
+                  Search {activeSource.label} and play videos right here in PinkFlix.
                 </p>
               </div>
-            ) : youtubeLoading ? (
+            ) : sourceLoading ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
                 <LoaderCircle
                   size={28}
                   className="animate-spin text-accent-400"
                 />
                 <p className="text-sm text-ink-tertiary">
-                  Searching YouTube…
+                  Searching {activeSource.label}…
                 </p>
               </div>
-            ) : youtubeError ? (
+            ) : sourceError ? (
               <div className="py-10 text-center">
                 <SearchX
                   size={28}
                   className="mx-auto mb-3 text-accent-400"
                 />
                 <h2 className="font-semibold text-ink-primary">
-                  YouTube search failed
+                  {activeSource.label} search failed
                 </h2>
                 <p className="mt-2 text-sm text-ink-tertiary break-words">
-                  {youtubeError}
+                  {sourceError}
                 </p>
                 <button
                   onClick={() => setQuery((value) => `${value} `)}
@@ -211,7 +172,7 @@ export function Search() {
                   Try again
                 </button>
               </div>
-            ) : youtubeResults.length === 0 ? (
+            ) : sourceResults.length === 0 ? (
               <EmptyState
                 icon={<SearchX size={24} />}
                 title="No videos found"
@@ -228,13 +189,14 @@ export function Search() {
             ) : (
               <>
                 <p className="text-[12.5px] text-ink-tertiary mb-3">
-                  {youtubeResults.length} YouTube results
+                  {sourceResults.length} {activeSource.label} results
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-3 gap-y-6">
-                  {youtubeResults.map((video) => (
-                    <YouTubeVideoCard
+                  {sourceResults.map((video) => (
+                    <SourceVideoCard
                       key={video.id}
                       video={video}
+                      sourceLabel={activeSource.label}
                       onPlay={setSelectedVideo}
                     />
                   ))}
@@ -288,7 +250,7 @@ export function Search() {
         )}
       </div>
 
-      {mode === 'catalog' && (
+      {!activeSource && (
         <FilterDrawer
           open={drawerOpen}
           onClose={() => setDrawerOpen(false)}
@@ -300,8 +262,10 @@ export function Search() {
       )}
 
       {selectedVideo && (
-        <YouTubePlayerOverlay
+        <SourcePlayerOverlay
+          key={`${selectedVideo.sourceId}:${selectedVideo.id}`}
           video={selectedVideo}
+          source={sourceRegistry.get(selectedVideo.sourceId)}
           onClose={closePlayer}
         />
       )}

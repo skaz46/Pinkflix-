@@ -4,7 +4,6 @@ import {
   PORNHUB_SOURCE_ID,
   browseEntries,
   embedUrl,
-  searchEntries,
 } from './catalogue'
 import { PORNHUB_ENTRIES } from './entries'
 
@@ -15,7 +14,6 @@ interface ApiVideo {
   video_id: string
   title: string
   duration?: string
-  views?: number
   default_thumb?: string
   thumb?: string
   publish_date?: string
@@ -32,6 +30,7 @@ function durationInSeconds(value?: string): number | undefined {
   if (!value) return undefined
 
   const parts = value.split(':').map(Number)
+
   if (parts.some((part) => !Number.isFinite(part) || part < 0)) {
     return undefined
   }
@@ -56,9 +55,10 @@ function mapVideo(video: ApiVideo): SourceVideo | null {
     sourceId: PORNHUB_SOURCE_ID,
     title: video.title,
     thumbnail: video.default_thumb || video.thumb,
-    subtitle: [...new Set([...categories, ...tags])]
-      .slice(0, 5)
-      .join(' · ') || undefined,
+    subtitle:
+      [...new Set([...categories, ...tags])]
+        .slice(0, 5)
+        .join(' · ') || undefined,
     durationSec: durationInSeconds(video.duration),
     publishedAt: video.publish_date,
     webUrl: embedUrl(video.video_id),
@@ -97,18 +97,18 @@ export const pornhubSource: VideoSource = {
   label: 'Pornhub',
   isAvailable: () => true,
 
-  // Keep the existing catalogue available when the search box is empty.
   browse: async () => browseEntries(PORNHUB_ENTRIES),
 
-  // Use live metadata for typed searches.
   search: async (query, signal) => {
     const term = query.trim()
-    if (!term) return browseEntries(PORNHUB_ENTRIES)
+
+    if (!term) {
+      return browseEntries(PORNHUB_ENTRIES)
+    }
 
     return searchLive(term, signal)
   },
 
-  // Continue using the existing in-app embed player.
   getPlayback: async (video) => ({
     kind: 'embed',
     url: embedUrl(video.id),
